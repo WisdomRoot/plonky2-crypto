@@ -1,8 +1,8 @@
-use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
 use alloc::{format, vec};
 use core::marker::PhantomData;
+use anyhow::Result;
 
 use plonky2::field::extension::Extendable;
 use plonky2::field::types::Field;
@@ -10,13 +10,12 @@ use plonky2::gates::gate::Gate;
 use plonky2::gates::util::StridedConstraintConsumer;
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::ext_target::ExtensionTarget;
-use plonky2::iop::generator::{GeneratedValues, SimpleGenerator, WitnessGenerator};
+use plonky2::iop::generator::{GeneratedValues, SimpleGenerator, WitnessGeneratorRef};
 use plonky2::iop::target::Target;
 use plonky2::iop::witness::{PartitionWitness, Witness, WitnessWrite};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::plonk_common::{reduce_with_powers, reduce_with_powers_ext_circuit};
 use plonky2::plonk::vars::{EvaluationTargets, EvaluationVars, EvaluationVarsBase};
-use plonky2::util::ceil_div_usize;
 
 /// A gate which can decompose a number into base B little-endian limbs.
 #[derive(Copy, Clone, Debug)]
@@ -37,7 +36,7 @@ impl<F: RichField + Extendable<D>, const D: usize> U32RangeCheckGate<F, D> {
     pub const BASE: usize = 1 << Self::AUX_LIMB_BITS;
 
     fn aux_limbs_per_input_limb(&self) -> usize {
-        ceil_div_usize(32, Self::AUX_LIMB_BITS)
+        32_usize.div_ceil(Self::AUX_LIMB_BITS)
     }
     pub fn wire_ith_input_limb(&self, i: usize) -> usize {
         debug_assert!(i < self.num_input_limbs);
@@ -138,9 +137,13 @@ impl<F: RichField + Extendable<D>, const D: usize> Gate<F, D> for U32RangeCheckG
         constraints
     }
 
-    fn generators(&self, row: usize, _local_constants: &[F]) -> Vec<Box<dyn WitnessGenerator<F>>> {
+    fn generators(
+        &self,
+        row: usize,
+        _local_constants: &[F],
+    ) -> Vec<WitnessGeneratorRef<F, D>> {
         let gen = U32RangeCheckGenerator { gate: *self, row };
-        vec![Box::new(gen.adapter())]
+        vec![WitnessGeneratorRef::new(gen.adapter())]
     }
 
     fn num_wires(&self) -> usize {
@@ -160,6 +163,16 @@ impl<F: RichField + Extendable<D>, const D: usize> Gate<F, D> for U32RangeCheckG
     fn num_constraints(&self) -> usize {
         self.num_input_limbs * (1 + self.aux_limbs_per_input_limb())
     }
+
+    fn serialize(&self, _dst: &mut Vec<u8>, _common_data: &plonky2::plonk::circuit_data::CommonCircuitData<F, D>) -> plonky2::util::serialization::IoResult<()> {
+        todo!()
+    }
+
+    fn deserialize(_src: &mut plonky2::util::serialization::Buffer, _common_data: &plonky2::plonk::circuit_data::CommonCircuitData<F, D>) -> plonky2::util::serialization::IoResult<Self>
+    where
+        Self: Sized {
+        todo!()
+    }
 }
 
 #[derive(Debug)]
@@ -168,7 +181,7 @@ pub struct U32RangeCheckGenerator<F: RichField + Extendable<D>, const D: usize> 
     row: usize,
 }
 
-impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F>
+impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D>
     for U32RangeCheckGenerator<F, D>
 {
     fn dependencies(&self) -> Vec<Target> {
@@ -178,7 +191,7 @@ impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F>
             .collect()
     }
 
-    fn run_once(&self, witness: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) {
+    fn run_once(&self, witness: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) -> Result<()> {
         let num_input_limbs = self.gate.num_input_limbs;
         for i in 0..num_input_limbs {
             let sum_value = witness
@@ -197,9 +210,25 @@ impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F>
                 .collect::<Vec<_>>();
 
             for (b, b_value) in limbs.zip(limbs_value) {
-                out_buffer.set_target(b, b_value);
+                out_buffer.set_target(b, b_value)?;
             }
         }
+
+        Ok(())
+    }
+
+    fn id(&self) -> String {
+        todo!()
+    }
+
+    fn serialize(&self, _dst: &mut Vec<u8>, _common_data: &plonky2::plonk::circuit_data::CommonCircuitData<F, D>) -> plonky2::util::serialization::IoResult<()> {
+        todo!()
+    }
+
+    fn deserialize(_src: &mut plonky2::util::serialization::Buffer, _common_data: &plonky2::plonk::circuit_data::CommonCircuitData<F, D>) -> plonky2::util::serialization::IoResult<Self>
+    where
+        Self: Sized {
+        todo!()
     }
 }
 
@@ -237,7 +266,7 @@ mod tests {
         const D: usize = 4;
         const AUX_LIMB_BITS: usize = 2;
         const BASE: usize = 1 << AUX_LIMB_BITS;
-        const AUX_LIMBS_PER_INPUT_LIMB: usize = ceil_div_usize(32, AUX_LIMB_BITS);
+        const AUX_LIMBS_PER_INPUT_LIMB: usize = 32.div_ceil(AUX_LIMB_BITS);
 
         fn get_wires(input_limbs: Vec<u64>) -> Vec<FF> {
             let mut v = Vec::new();

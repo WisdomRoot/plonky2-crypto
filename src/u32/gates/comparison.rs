@@ -1,8 +1,8 @@
-use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
 use alloc::{format, vec};
 use core::marker::PhantomData;
+use anyhow::Result;
 
 use plonky2::field::extension::Extendable;
 use plonky2::field::packed::PackedField;
@@ -12,7 +12,7 @@ use plonky2::gates::packed_util::PackedEvaluableBase;
 use plonky2::gates::util::StridedConstraintConsumer;
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::ext_target::ExtensionTarget;
-use plonky2::iop::generator::{GeneratedValues, SimpleGenerator, WitnessGenerator};
+use plonky2::iop::generator::{GeneratedValues, SimpleGenerator, WitnessGeneratorRef};
 use plonky2::iop::target::Target;
 use plonky2::iop::wire::Wire;
 use plonky2::iop::witness::{PartitionWitness, Witness, WitnessWrite};
@@ -22,7 +22,7 @@ use plonky2::plonk::vars::{
     EvaluationTargets, EvaluationVars, EvaluationVarsBase, EvaluationVarsBaseBatch,
     EvaluationVarsBasePacked,
 };
-use plonky2::util::{bits_u64, ceil_div_usize};
+use plonky2::util::bits_u64;
 
 /// A gate for checking that one value is less than or equal to another.
 #[derive(Clone, Debug)]
@@ -43,7 +43,7 @@ impl<F: RichField + Extendable<D>, const D: usize> ComparisonGate<F, D> {
     }
 
     pub fn chunk_bits(&self) -> usize {
-        ceil_div_usize(self.num_bits, self.num_chunks)
+        self.num_bits.div_ceil(self.num_chunks)
     }
 
     pub fn wire_first_input(&self) -> usize {
@@ -287,12 +287,16 @@ impl<F: RichField + Extendable<D>, const D: usize> Gate<F, D> for ComparisonGate
         constraints
     }
 
-    fn generators(&self, row: usize, _local_constants: &[F]) -> Vec<Box<dyn WitnessGenerator<F>>> {
+    fn generators(
+        &self,
+        row: usize,
+        _local_constants: &[F],
+    ) -> Vec<WitnessGeneratorRef<F, D>> {
         let gen = ComparisonGenerator::<F, D> {
             row,
             gate: self.clone(),
         };
-        vec![Box::new(gen.adapter())]
+        vec![WitnessGeneratorRef::new(gen.adapter())]
     }
 
     fn num_wires(&self) -> usize {
@@ -309,6 +313,16 @@ impl<F: RichField + Extendable<D>, const D: usize> Gate<F, D> for ComparisonGate
 
     fn num_constraints(&self) -> usize {
         6 + 5 * self.num_chunks + self.chunk_bits()
+    }
+
+    fn serialize(&self, _dst: &mut Vec<u8>, _common_data: &plonky2::plonk::circuit_data::CommonCircuitData<F, D>) -> plonky2::util::serialization::IoResult<()> {
+        todo!()
+    }
+
+    fn deserialize(_src: &mut plonky2::util::serialization::Buffer, _common_data: &plonky2::plonk::circuit_data::CommonCircuitData<F, D>) -> plonky2::util::serialization::IoResult<Self>
+    where
+        Self: Sized {
+        todo!()
     }
 }
 
@@ -401,7 +415,7 @@ struct ComparisonGenerator<F: RichField + Extendable<D>, const D: usize> {
     gate: ComparisonGate<F, D>,
 }
 
-impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F>
+impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D>
     for ComparisonGenerator<F, D>
 {
     fn dependencies(&self) -> Vec<Target> {
@@ -413,7 +427,7 @@ impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F>
         ]
     }
 
-    fn run_once(&self, witness: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) {
+    fn run_once(&self, witness: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) -> Result<()> {
         let local_wire = |column| Wire {
             row: self.row,
             column,
@@ -481,36 +495,52 @@ impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F>
             .map(|x| F::from_canonical_u64(*x))
             .collect();
 
-        out_buffer.set_wire(local_wire(self.gate.wire_result_bool()), result);
+        out_buffer.set_wire(local_wire(self.gate.wire_result_bool()), result)?;
         out_buffer.set_wire(
             local_wire(self.gate.wire_most_significant_diff()),
             most_significant_diff,
-        );
+        )?;
         for i in 0..self.gate.num_chunks {
             out_buffer.set_wire(
                 local_wire(self.gate.wire_first_chunk_val(i)),
                 first_input_chunks[i],
-            );
+            )?;
             out_buffer.set_wire(
                 local_wire(self.gate.wire_second_chunk_val(i)),
                 second_input_chunks[i],
-            );
+            )?;
             out_buffer.set_wire(
                 local_wire(self.gate.wire_equality_dummy(i)),
                 equality_dummies[i],
-            );
-            out_buffer.set_wire(local_wire(self.gate.wire_chunks_equal(i)), chunks_equal[i]);
+            )?;
+            out_buffer.set_wire(local_wire(self.gate.wire_chunks_equal(i)), chunks_equal[i])?;
             out_buffer.set_wire(
                 local_wire(self.gate.wire_intermediate_value(i)),
                 intermediate_values[i],
-            );
+            )?;
         }
         for (i, &msd_bit) in msd_bits.iter().enumerate().take(self.gate.chunk_bits() + 1) {
             out_buffer.set_wire(
                 local_wire(self.gate.wire_most_significant_diff_bit(i)),
                 msd_bit,
-            );
+            )?;
         }
+
+        Ok(())
+    }
+
+    fn id(&self) -> String {
+        todo!()
+    }
+
+    fn serialize(&self, _dst: &mut Vec<u8>, _common_data: &plonky2::plonk::circuit_data::CommonCircuitData<F, D>) -> plonky2::util::serialization::IoResult<()> {
+        todo!()
+    }
+
+    fn deserialize(_src: &mut plonky2::util::serialization::Buffer, _common_data: &plonky2::plonk::circuit_data::CommonCircuitData<F, D>) -> plonky2::util::serialization::IoResult<Self>
+    where
+        Self: Sized {
+        todo!()
     }
 }
 

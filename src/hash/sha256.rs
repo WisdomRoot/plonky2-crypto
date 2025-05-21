@@ -4,6 +4,7 @@ use plonky2::field::types::PrimeField64;
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::witness::Witness;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
+use anyhow::Result;
 
 use crate::biguint::CircuitBuilderBiguint;
 use crate::hash::{HashInputTarget, HashOutputTarget, WitnessHash};
@@ -13,12 +14,12 @@ use crate::u32::interleaved_u32::CircuitBuilderB32;
 use super::Hash256Target;
 
 pub trait WitnessHashSha2<F: PrimeField64>: Witness<F> {
-    fn set_sha256_input_target(&mut self, target: &HashInputTarget, value: &[u8]);
-    fn set_sha256_output_target(&mut self, target: &HashOutputTarget, value: &[u8]);
+    fn set_sha256_input_target(&mut self, target: &HashInputTarget, value: &[u8]) -> Result<()> ;
+    fn set_sha256_output_target(&mut self, target: &HashOutputTarget, value: &[u8]) -> Result<()> ;
 }
 
 impl<T: Witness<F>, F: PrimeField64> WitnessHashSha2<F> for T {
-    fn set_sha256_input_target(&mut self, target: &HashInputTarget, value: &[u8]) {
+    fn set_sha256_input_target(&mut self, target: &HashInputTarget, value: &[u8]) -> Result<()> {
         // sha256 padding
         let mut input_biguint = BigUint::from_bytes_le(value);
         let input_len_bits = value.len() as u64 * 8;
@@ -32,12 +33,12 @@ impl<T: Witness<F>, F: PrimeField64> WitnessHashSha2<F> for T {
                 input_biguint.set_bit(pos as u64, b & (1 << j) > 0);
             }
         }
-        self.set_hash_input_be_target(target, &input_biguint);
+        self.set_hash_input_be_target(target, &input_biguint)
     }
 
-    fn set_sha256_output_target(&mut self, target: &HashOutputTarget, value: &[u8]) {
+    fn set_sha256_output_target(&mut self, target: &HashOutputTarget, value: &[u8]) -> Result<()> {
         let output_biguint = BigUint::from_bytes_le(value);
-        self.set_hash_output_be_target(target, &output_biguint);
+        self.set_hash_output_be_target(target, &output_biguint)
     }
 }
 

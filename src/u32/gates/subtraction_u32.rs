@@ -1,8 +1,8 @@
-use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
 use alloc::{format, vec};
 use core::marker::PhantomData;
+use anyhow::Result;
 
 use plonky2::field::extension::Extendable;
 use plonky2::field::packed::PackedField;
@@ -12,7 +12,7 @@ use plonky2::gates::packed_util::PackedEvaluableBase;
 use plonky2::gates::util::StridedConstraintConsumer;
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::ext_target::ExtensionTarget;
-use plonky2::iop::generator::{GeneratedValues, SimpleGenerator, WitnessGenerator};
+use plonky2::iop::generator::{GeneratedValues, SimpleGenerator, WitnessGeneratorRef};
 use plonky2::iop::target::Target;
 use plonky2::iop::wire::Wire;
 use plonky2::iop::witness::{PartitionWitness, Witness, WitnessWrite};
@@ -186,10 +186,14 @@ impl<F: RichField + Extendable<D>, const D: usize> Gate<F, D> for U32Subtraction
         constraints
     }
 
-    fn generators(&self, row: usize, _local_constants: &[F]) -> Vec<Box<dyn WitnessGenerator<F>>> {
+    fn generators(
+        &self,
+        row: usize,
+        _local_constants: &[F],
+    ) -> Vec<WitnessGeneratorRef<F, D>> {
         (0..self.num_ops)
             .map(|i| {
-                let g: Box<dyn WitnessGenerator<F>> = Box::new(
+                let g: WitnessGeneratorRef<F, D> = WitnessGeneratorRef::new(
                     U32SubtractionGenerator {
                         gate: *self,
                         row,
@@ -217,6 +221,16 @@ impl<F: RichField + Extendable<D>, const D: usize> Gate<F, D> for U32Subtraction
 
     fn num_constraints(&self) -> usize {
         self.num_ops * (3 + Self::num_limbs())
+    }
+
+    fn serialize(&self, _dst: &mut Vec<u8>, _common_data: &plonky2::plonk::circuit_data::CommonCircuitData<F, D>) -> plonky2::util::serialization::IoResult<()> {
+        todo!()
+    }
+
+    fn deserialize(_src: &mut plonky2::util::serialization::Buffer, _common_data: &plonky2::plonk::circuit_data::CommonCircuitData<F, D>) -> plonky2::util::serialization::IoResult<Self>
+    where
+        Self: Sized {
+        todo!()
     }
 }
 
@@ -270,7 +284,7 @@ struct U32SubtractionGenerator<F: RichField + Extendable<D>, const D: usize> {
     _phantom: PhantomData<F>,
 }
 
-impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F>
+impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D>
     for U32SubtractionGenerator<F, D>
 {
     fn dependencies(&self) -> Vec<Target> {
@@ -283,7 +297,7 @@ impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F>
         ]
     }
 
-    fn run_once(&self, witness: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) {
+    fn run_once(&self, witness: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) -> Result<()> {
         let local_wire = |column| Wire {
             row: self.row,
             column,
@@ -309,8 +323,8 @@ impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F>
         let output_result_wire = local_wire(self.gate.wire_ith_output_result(self.i));
         let output_borrow_wire = local_wire(self.gate.wire_ith_output_borrow(self.i));
 
-        out_buffer.set_wire(output_result_wire, output_result);
-        out_buffer.set_wire(output_borrow_wire, output_borrow);
+        out_buffer.set_wire(output_result_wire, output_result)?;
+        out_buffer.set_wire(output_borrow_wire, output_borrow)?;
 
         let output_result_u64 = output_result.to_canonical_u64();
 
@@ -326,8 +340,24 @@ impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F>
 
         for (j, &output_limb) in output_limbs.iter().enumerate().take(num_limbs) {
             let wire = local_wire(self.gate.wire_ith_output_jth_limb(self.i, j));
-            out_buffer.set_wire(wire, output_limb);
+            out_buffer.set_wire(wire, output_limb)?;
         }
+
+        Ok(())
+    }
+
+    fn id(&self) -> String {
+        todo!()
+    }
+
+    fn serialize(&self, _dst: &mut Vec<u8>, _common_data: &plonky2::plonk::circuit_data::CommonCircuitData<F, D>) -> plonky2::util::serialization::IoResult<()> {
+        todo!()
+    }
+
+    fn deserialize(_src: &mut plonky2::util::serialization::Buffer, _common_data: &plonky2::plonk::circuit_data::CommonCircuitData<F, D>) -> plonky2::util::serialization::IoResult<Self>
+    where
+        Self: Sized {
+        todo!()
     }
 }
 

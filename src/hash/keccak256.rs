@@ -4,6 +4,7 @@ use plonky2::field::types::PrimeField64;
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::witness::Witness;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
+use anyhow::Result;
 
 use crate::biguint::CircuitBuilderBiguint;
 use crate::hash::{HashInputTarget, HashOutputTarget, WitnessHash};
@@ -14,12 +15,12 @@ const KECCAK256_C: usize = 1600;
 pub const KECCAK256_R: usize = 1088;
 
 pub trait WitnessHashKeccak<F: PrimeField64>: Witness<F> {
-    fn set_keccak256_input_target(&mut self, target: &HashInputTarget, value: &[u8]);
-    fn set_keccak256_output_target(&mut self, target: &HashOutputTarget, value: &[u8]);
+    fn set_keccak256_input_target(&mut self, target: &HashInputTarget, value: &[u8]) -> Result<()> ;
+    fn set_keccak256_output_target(&mut self, target: &HashOutputTarget, value: &[u8]) -> Result<()> ;
 }
 
 impl<T: Witness<F>, F: PrimeField64> WitnessHashKeccak<F> for T {
-    fn set_keccak256_input_target(&mut self, target: &HashInputTarget, value: &[u8]) {
+    fn set_keccak256_input_target(&mut self, target: &HashInputTarget, value: &[u8]) -> Result<()> {
         let mut input_biguint = BigUint::from_bytes_le(value);
         let input_len_bits = value.len() * 8;
         let num_actual_blocks = 1 + input_len_bits / KECCAK256_R;
@@ -31,12 +32,12 @@ impl<T: Witness<F>, F: PrimeField64> WitnessHashKeccak<F> for T {
         // last bit of the last block
         input_biguint.set_bit(padded_len_bits as u64 - 1, true);
 
-        self.set_hash_input_le_target(target, &input_biguint);
-        self.set_hash_blocks_target(target, num_actual_blocks);
+        self.set_hash_input_le_target(target, &input_biguint)?;
+        self.set_hash_blocks_target(target, num_actual_blocks)
     }
 
-    fn set_keccak256_output_target(&mut self, target: &HashOutputTarget, value: &[u8]) {
-        self.set_hash_output_le_target(target, value);
+    fn set_keccak256_output_target(&mut self, target: &HashOutputTarget, value: &[u8]) -> Result<()> {
+        self.set_hash_output_le_target(target, value)
     }
 }
 

@@ -2,6 +2,7 @@ use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::target::{BoolTarget, Target};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
+use anyhow::Result;
 
 use crate::u32::arithmetic_u32::U32Target;
 
@@ -78,12 +79,13 @@ impl MerkleProofSha256Gadget {
         index: u64,
         value: &[u8; 32],
         siblings: &Vec<[u8; 32]>,
-    ) {
-        witness.set_hash256_target(&self.value, value);
-        witness.set_target(self.index, F::from_noncanonical_u64(index));
+    ) -> Result<()> {
+        witness.set_hash256_target(&self.value, value)?;
+        witness.set_target(self.index, F::from_noncanonical_u64(index))?;
         for (i, sibling) in self.siblings.iter().enumerate() {
-            witness.set_hash256_target(sibling, &siblings[i]);
+            witness.set_hash256_target(sibling, &siblings[i])?;
         }
+        Ok(())
     }
 }
 
@@ -131,13 +133,15 @@ impl DeltaMerkleProofSha256Gadget {
         old_value: &[u8; 32],
         new_value: &[u8; 32],
         siblings: &Vec<[u8; 32]>,
-    ) {
-        witness.set_hash256_target(&self.old_value, old_value);
-        witness.set_hash256_target(&self.new_value, new_value);
-        witness.set_target(self.index, F::from_noncanonical_u64(index));
+    ) -> Result<()> {
+        witness.set_hash256_target(&self.old_value, old_value)?;
+        witness.set_hash256_target(&self.new_value, new_value)?;
+        witness.set_target(self.index, F::from_noncanonical_u64(index))?;
         for (i, sibling) in self.siblings.iter().enumerate() {
-            witness.set_hash256_target(sibling, &siblings[i]);
+            witness.set_hash256_target(sibling, &siblings[i])?;
         }
+
+        Ok(())
     }
 }
 

@@ -1,3 +1,4 @@
+use anyhow::Result;
 use num::BigUint;
 use plonky2::field::extension::Extendable;
 use plonky2::field::types::PrimeField64;
@@ -38,20 +39,20 @@ fn read_u32_be_at(array: &[u8], index: usize) -> u32 {
 }
 
 pub trait WitnessHash<F: PrimeField64>: Witness<F> {
-    fn set_biguint_u32_be_target(&mut self, target: &BigUintTarget, value: &BigUint);
+    fn set_biguint_u32_be_target(&mut self, target: &BigUintTarget, value: &BigUint) -> Result<()> ;
 
-    fn set_hash_input_be_target(&mut self, target: &HashInputTarget, value: &BigUint);
-    fn set_hash_output_be_target(&mut self, target: &HashOutputTarget, value: &BigUint);
+    fn set_hash_input_be_target(&mut self, target: &HashInputTarget, value: &BigUint) -> Result<()> ;
+    fn set_hash_output_be_target(&mut self, target: &HashOutputTarget, value: &BigUint) -> Result<()> ;
 
-    fn set_hash_input_le_target(&mut self, target: &HashInputTarget, value: &BigUint);
-    fn set_hash_output_le_target(&mut self, target: &HashOutputTarget, value: &[u8]);
+    fn set_hash_input_le_target(&mut self, target: &HashInputTarget, value: &BigUint) -> Result<()> ;
+    fn set_hash_output_le_target(&mut self, target: &HashOutputTarget, value: &[u8]) -> Result<()> ;
 
-    fn set_hash_blocks_target(&mut self, target: &HashInputTarget, num_blocks: usize);
-    fn set_hash256_target(&mut self, target: &Hash256Target, value: &[u8; 32]);
+    fn set_hash_blocks_target(&mut self, target: &HashInputTarget, num_blocks: usize) -> Result<()> ;
+    fn set_hash256_target(&mut self, target: &Hash256Target, value: &[u8; 32]) -> Result<()> ;
 }
 
 impl<T: Witness<F>, F: PrimeField64> WitnessHash<F> for T {
-    fn set_biguint_u32_be_target(&mut self, target: &BigUintTarget, value: &BigUint) {
+    fn set_biguint_u32_be_target(&mut self, target: &BigUintTarget, value: &BigUint) -> Result<()>  {
         // similar to self.set_biguint_target()
         // but need u32 in big-endian
         let mut limbs = value.to_u32_digits();
@@ -59,42 +60,45 @@ impl<T: Witness<F>, F: PrimeField64> WitnessHash<F> for T {
         limbs.resize(target.num_limbs(), 0);
         for (i, item) in limbs.iter().enumerate().take(target.num_limbs()) {
             // set target with u32 in big-endian
-            self.set_u32_target(target.limbs[i], item.to_be());
+            self.set_u32_target(target.limbs[i], item.to_be())?;
         }
+
+        Ok(())
     }
 
-    fn set_hash_input_be_target(&mut self, target: &HashInputTarget, value: &BigUint) {
-        self.set_biguint_u32_be_target(&target.input, value);
+    fn set_hash_input_be_target(&mut self, target: &HashInputTarget, value: &BigUint) -> Result<()>  {
+        self.set_biguint_u32_be_target(&target.input, value)
     }
 
-    fn set_hash_output_be_target(&mut self, target: &HashOutputTarget, value: &BigUint) {
-        self.set_biguint_u32_be_target(target, value);
+    fn set_hash_output_be_target(&mut self, target: &HashOutputTarget, value: &BigUint) -> Result<()>  {
+        self.set_biguint_u32_be_target(target, value)
     }
 
-    fn set_hash_input_le_target(&mut self, target: &HashInputTarget, value: &BigUint) {
-        self.set_biguint_target(&target.input, value);
+    fn set_hash_input_le_target(&mut self, target: &HashInputTarget, value: &BigUint) -> Result<()>  {
+        self.set_biguint_target(&target.input, value)
     }
 
-    fn set_hash_output_le_target(&mut self, target: &HashOutputTarget, value: &[u8]) {
+    fn set_hash_output_le_target(&mut self, target: &HashOutputTarget, value: &[u8]) -> Result<()>  {
         let output_biguint = BigUint::from_bytes_le(value);
-        self.set_biguint_target(target, &output_biguint);
+        self.set_biguint_target(target, &output_biguint)
     }
 
-    fn set_hash_blocks_target(&mut self, target: &HashInputTarget, num_blocks: usize) {
+    fn set_hash_blocks_target(&mut self, target: &HashInputTarget, num_blocks: usize) -> Result<()>  {
         for (i, t) in target.blocks.iter().enumerate() {
-            self.set_bool_target(*t, i < num_blocks - 1);
+            self.set_bool_target(*t, i < num_blocks - 1)?;
         }
+        Ok(())
     }
 
-    fn set_hash256_target(&mut self, target: &Hash256Target, value: &[u8; 32]) {
-        self.set_u32_target(target[0], read_u32_be_at(value, 0));
-        self.set_u32_target(target[1], read_u32_be_at(value, 4));
-        self.set_u32_target(target[2], read_u32_be_at(value, 8));
-        self.set_u32_target(target[3], read_u32_be_at(value, 12));
-        self.set_u32_target(target[4], read_u32_be_at(value, 16));
-        self.set_u32_target(target[5], read_u32_be_at(value, 20));
-        self.set_u32_target(target[6], read_u32_be_at(value, 24));
-        self.set_u32_target(target[7], read_u32_be_at(value, 28));
+    fn set_hash256_target(&mut self, target: &Hash256Target, value: &[u8; 32]) -> Result<()>  {
+        self.set_u32_target(target[0], read_u32_be_at(value, 0))?;
+        self.set_u32_target(target[1], read_u32_be_at(value, 4))?;
+        self.set_u32_target(target[2], read_u32_be_at(value, 8))?;
+        self.set_u32_target(target[3], read_u32_be_at(value, 12))?;
+        self.set_u32_target(target[4], read_u32_be_at(value, 16))?;
+        self.set_u32_target(target[5], read_u32_be_at(value, 20))?;
+        self.set_u32_target(target[6], read_u32_be_at(value, 24))?;
+        self.set_u32_target(target[7], read_u32_be_at(value, 28))
     }
 }
 
