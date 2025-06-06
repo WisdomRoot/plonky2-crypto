@@ -7,8 +7,6 @@ edition = "2021"
 env_logger = "0.11.8"
 plonky2 = "1.0.2"
 plonky2_crypto = "0.1"
-
-[dev-dependencies]
 hex = "0.4"
 
 [patch.crates-io]
